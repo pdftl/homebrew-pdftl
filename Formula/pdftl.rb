@@ -170,7 +170,7 @@ class Pdftl < Formula
     # 2. Dependency Path Mapping
     # Collect all dependencies we need to "map" into CPATH/LIBRARY_PATH
     libs = %w[libxml2 libxslt libffi libtiff webp freetype].map { |name| Formula[name] }
-    
+
     libs.each do |f|
       ENV.append_path "CPATH", f.opt_include
       ENV.append_path "LIBRARY_PATH", f.opt_lib
