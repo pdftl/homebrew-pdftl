@@ -7,35 +7,24 @@ class Pdftl < Formula
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
 
-  # We removed 'env :std' to let Homebrew's Superenv manage the compiler/assembler.
-
+  depends_on "ccache" => :build
   depends_on "pkg-config" => :build
   depends_on "rust" => :build # for 'cryptography'
-  depends_on "ccache" => :build
+  depends_on "freetype"
   depends_on "jpeg-turbo"
+  depends_on "libffi"
   depends_on "libheif"
   depends_on "libpng"
-  depends_on "python@3.12"
-  depends_on "qpdf"
-  depends_on "zlib"
-
-  depends_on "freetype"
-  depends_on "little-cms2"
-  depends_on "webp"
-  depends_on "openjpeg"
-  depends_on "libtiff" 
-
-  depends_on "libffi"
+  depends_on "libtiff"
   depends_on "libxml2"
   depends_on "libxslt"
+  depends_on "little-cms2"
+  depends_on "openjpeg"
+  depends_on "python@3.12"
+  depends_on "qpdf"
+  depends_on "webp"
+  depends_on "zlib"
 
-
-  # --- Resources (Dependencies from pyproject.toml) ---
-
-  # resource "cffi" do
-  #   url "https://files.pythonhosted.org/packages/fc/97/c783634659c2920c3fc70419e3af40972dbaf758daa229a7d6ea6135c90d/cffi-1.17.1.tar.gz"
-  #   sha256 "1c39c6016c32bc48dd54561950ebd6836e1670f2ae46128f67cf49e789c52824"
-  # end  
   resource "cffi" do
     url "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz"
     sha256 "44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529"
@@ -111,7 +100,7 @@ class Pdftl < Formula
     sha256 "00243ae351a257117b6a241061796684b084ed1c516a08c48a3f7e147a9d80b4"
   end
 
-  resource "pdfminer.six" do
+  resource "pdfminer-six" do
     url "https://files.pythonhosted.org/packages/34/a4/5cec1112009f0439a5ca6afa8ace321f0ab2f48da3255b7a1c8953014670/pdfminer_six-20260107.tar.gz"
     sha256 "96bfd431e3577a55a0efd25676968ca4ce8fd5b53f14565f85716ff363889602"
   end
@@ -166,110 +155,95 @@ class Pdftl < Formula
     sha256 "5fdcb09bf6db023d88f312bd0767594b414655d58090fc1c46b3414415f67fac"
   end
 
-
   def install
-    venv = virtualenv_create(libexec, "python3.12")
+    python_f = deps.map(&:to_formula).find { |f| f.name.start_with?("python@") }
+    pyver = python_f.version.major_minor # e.g., "3.12"
 
-    ENV["CC"] = "ccache gcc-15"
-
-    # make flags (parallel builds)
+    # 1. Compiler Setup
+    if which("ccache")
+      ENV["CC"] = "ccache #{ENV.cc}"
+      ENV["CXX"] = "ccache #{ENV.cxx}"
+    end
     ENV["MAKEFLAGS"] = "-j#{ENV.make_jobs}"
     ENV["MAX_CONCURRENCY"] = ENV.make_jobs.to_s
 
-    # 1. Formula references
-    python = Formula["python@3.12"]
-    libxml2 = Formula["libxml2"]
-    libxslt = Formula["libxslt"]
-    libffi = Formula["libffi"]
-
-    # 2. Add the "Deep" include paths
-    # We add both the base include and the libxml2 subfolder
-    ENV.append_path "CPATH", python.opt_include/"python3.12"
-    ENV.append_path "CPATH", libxml2.opt_include # Search for "libxml2/libxml/..."
-    ENV.append_path "CPATH", libxml2.opt_include/"libxml2" # Search for "libxml/..."
-    ENV.append_path "CPATH", libxslt.opt_include
-    ENV.append_path "CPATH", libffi.opt_include
-
-    # 3. Standard Library Paths
-    ENV.append_path "LIBRARY_PATH", libxml2.opt_lib
-    ENV.append_path "LIBRARY_PATH", libxslt.opt_lib
-    ENV.append_path "LIBRARY_PATH", libffi.opt_lib
-
-    # 4. Helper variables for lxml's custom build script
-    ENV["XML2_CONFIG"] = libxml2.opt_bin/"xml2-config"
-    ENV["XSLT_CONFIG"] = libxslt.opt_bin/"xslt-config"
-
+    # 2. Dependency Path Mapping
+    # Collect all dependencies we need to "map" into CPATH/LIBRARY_PATH
+    libs = %w[libxml2 libxslt libffi libtiff webp freetype].map { |name| Formula[name] }
     
-    openjpeg = Formula["openjpeg"]
-    libtiff = Formula["libtiff"]
-    webp = Formula["webp"]
-
-    # Tell Pillow's custom build script where to look
-    ENV["OPENJPEG_ROOT"] = openjpeg.opt_prefix
-    ENV["TIFF_ROOT"] = libtiff.opt_prefix
-    ENV["WEBP_ROOT"] = webp.opt_prefix
-
-    # Add the include subfolder for openjpeg specifically
-    # It often hides in include/openjpeg-2.x
-    ENV.append_path "CPATH", openjpeg.opt_include/"openjpeg-2.5" # or 2.4 depending on version
-    ENV.append_path "CPATH", libtiff.opt_include
-    ENV.append_path "CPATH", webp.opt_include
-
-    # 5. Install build essentials
-    %w[pycparser].each { |r| venv.pip_install resource(r) }
-
-    # Collect all imaging formulae
-    imaging_deps = %w[jpeg-turbo libpng zlib freetype webp little-cms2 openjpeg libtiff]
-    
-    imaging_deps.each do |dep|
-      f = Formula[dep]
-      # 1. Set the ROOT variables Pillow's setup.py expects
-      # e.g., ENV["JPEG_ROOT"] = ...
-      env_name = dep.gsub("-", "").upcase
-      ENV["#{env_name}_ROOT"] = f.opt_prefix
-      
-      # 2. Add to standard compiler search paths
+    libs.each do |f|
       ENV.append_path "CPATH", f.opt_include
       ENV.append_path "LIBRARY_PATH", f.opt_lib
     end
 
-    # 3. Handle the "special" nested include directories
-    ENV.append_path "CPATH", Formula["freetype"].opt_include/"freetype2"
-    ENV.append_path "CPATH", Formula["openjpeg"].opt_include/"openjpeg-2.5"
+    # 3. Handle Nested/Special Includes
+    [
+      python_f.opt_include/"python#{pyver}",
+      Formula["libxml2"].opt_include/"libxml2",
+      Formula["freetype"].opt_include/"freetype2",
+      Dir[Formula["openjpeg"].opt_include/"openjpeg-*"].first,
+    ].compact.each { |path| ENV.append_path "CPATH", path }
 
-    # problematic resources first
-    ohai "Installing high-priority resource: cffi"
-    venv.pip_install resource("cffi")
-
-
-    ohai "Installing high-priority resource: pillow"
-    # ENV["JPEG_ROOT"] = Formula["jpeg-turbo"].opt_prefix
-    venv.pip_install resource("pillow")
-
-    ohai "Installing high-priority resource: lxml"
+    # 4. Tool-Specific Variables
+    ENV["XML2_CONFIG"] = Formula["libxml2"].opt_bin/"xml2-config"
+    ENV["XSLT_CONFIG"] = Formula["libxslt"].opt_bin/"xslt-config"
     ENV["PYTHON_LXML_LIBRARY_DIRECTORY"] = Formula["libxml2"].opt_lib
-    venv.pip_install resource("lxml")
 
-    # resources.each do |r|
-    #   next if %w[pycparser cffi lxml pillow].include?(r.name)
-    #   venv.pip_install r
-    # end
+    # Pillow Roots
+    %w[openjpeg libtiff webp].each do |name|
+      ENV["#{name.delete_prefix("lib").upcase}_ROOT"] = Formula[name].opt_prefix
+    end
+
+    venv = virtualenv_create(libexec, "python#{pyver}")
+
+    # 'high priority'/problematic resources first
+    first_resources = %w[pycparser cffi pillow lxml]
+    first_resources.each do |res|
+      ohai "Installing high-priority resource: #{res}"
+      venv.pip_install resource(res)
+    end
+
     ohai "Installing remaining resources"
-    remaining = resources.reject { |r| %w[pycparser lxml cffi pillow].include?(r.name) }
+    remaining = resources.reject { |r| first_resources.include?(r.name) }
     venv.pip_install remaining
 
     venv.pip_install_and_link buildpath
 
-    begin
-      pdftl_bin = bin/"pdftl"
-      bash_completion.install Utils.safe_popen_read(pdftl_bin, "--completion", "bash") => "pdftl"
-      zsh_completion.install  Utils.safe_popen_read(pdftl_bin, "--completion", "zsh")  => "_pdftl"
-    rescue
-      opoo "Shell completions could not be generated at build time."
+    site_packages = libexec/"lib/python#{pyver}/site-packages"
+
+    # We use 'Language::Python.rewrite_python_shebang' style logic here
+    with_env(PYTHONPATH: site_packages) do
+      {
+        "bash" => "pdftl",
+        "zsh"  => "_pdftl",
+      }.each do |shell, completion_name|
+        path = buildpath/"pdftl.#{shell}"
+        content = Utils.safe_popen_read(bin/"pdftl", "--completion", shell)
+
+        # Replace the hardcoded Cellar version path with the stable 'opt' path
+        content.gsub!(libexec.to_s, opt_libexec.to_s)
+
+        path.write content
+        ((shell == "bash") ? bash_completion : zsh_completion).install path => completion_name
+      end
     end
   end
 
+  def caveats
+    <<~EOS
+      Bash users:
+        Add the following to your .bashrc:
+          [ -f #{etc}/bash_completion.d/pdftl ] && . #{etc}/bash_completion.d/pdftl
+
+      Zsh users:
+        Ensure your FPATH includes the Homebrew site-functions directory:
+          export FPATH="#{HOMEBREW_PREFIX}/share/zsh/site-functions:$FPATH"
+        Then initialize completion by adding 'autoload -Uz compinit && compinit' to your .zshrc.
+    EOS
+  end
+
   test do
-    system bin/"pdftl", "--version"
+    assert_match version.to_s, shell_output("#{bin}/pdftl --version")
+    system libexec/"bin/python", "-c", "import lxml.etree; import PIL; import cffi; import pikepdf; import pdftl"
   end
 end
