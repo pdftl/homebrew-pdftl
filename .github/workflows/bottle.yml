@@ -9,16 +9,52 @@ permissions:
   contents: write
 
 jobs:
-  build-bottles:
-    name: Build bottle (${{ matrix.os }})
+  build:
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os:
-          - ubuntu-22.04     # Linux x86_64
-          - macos-13         # Intel (Ventura)
-          - macos-14         # Apple Silicon (Sonoma)
+        os: [ubuntu-22.04, macos-13, macos-14]
+
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Update Homebrew
+        run: brew update
+
+      - name: Tap repository
+        run: brew tap pdftl/pdftl
+
+      - name: Build bottle
+        run: |
+          brew install --build-bottle pdftl
+          brew linkage --test pdftl
+          brew bottle --json \
+            --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
+            pdftl
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.bottle.*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload JSON Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bottles_${{ matrix.os }}
+          path: "*.bottle.json"
+
+  merge:
+    name: Merge Bottles
+    needs: build
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout tap
@@ -32,36 +68,21 @@ jobs:
       - name: Update Homebrew
         run: brew update
 
-      - name: Tap repository
-        run: brew tap pdftl/pdftl
-
-      - name: Install formula for bottling
-        run: brew install --build-bottle pdftl
-
-      - name: Run linkage test
-        run: brew linkage --test pdftl
-
-      - name: Create bottle
-        run: brew bottle --json pdftl
-
-      - name: Upload bottle to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Download all JSON artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: |
-            *.bottle.*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: bottle-jsons
+          pattern: bottles_*
+          merge-multiple: true
 
-      - name: Merge bottle JSON into formula
+      - name: Merge JSONs into Formula
         run: |
-          brew bottle --merge --write --no-commit *.json
+          brew bottle --merge --write --no-commit bottle-jsons/*.json
 
-      - name: Commit updated formula
+      - name: Commit and Push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add Formula/*.rb
-          git commit -m "Update bottle block for ${GITHUB_REF_NAME}" || echo "No changes to commit"
-
-      - name: Push updated formula
-        run: git push
+          git add Formula/pdftl.rb
+          git commit -m "pdftl: update bottle block for ${GITHUB_REF_NAME}" || echo "No changes"
+          git push
