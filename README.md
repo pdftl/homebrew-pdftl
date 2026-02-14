@@ -1,16 +1,16 @@
-# Pdftl-dev Pdftl
+# Pdftl homebrew formula
 
-## How do I install these formulae?
+## How do I install this formulae?
 
-`brew install pdftl-dev/pdftl/<formula>`
+`brew install pdftl/pdftl/pdftl`
 
-Or `brew tap pdftl-dev/pdftl` and then `brew install <formula>`.
+Or `brew tap pdftl/pdftl` and then `brew install pdftl`.
 
 Or, in a `brew bundle` `Brewfile`:
 
 ```ruby
-tap "pdftl-dev/pdftl"
-brew "<formula>"
+tap "pdftl/pdftl"
+brew "pdftl"
 ```
 
 ## Documentation
