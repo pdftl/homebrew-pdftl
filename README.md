@@ -1,6 +1,6 @@
 # Pdftl homebrew formula
 
-## How do I install this formulae?
+## How do I install this formula?
 
 `brew install pdftl/pdftl/pdftl`
 
