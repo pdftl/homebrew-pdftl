@@ -15,7 +15,8 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-22.04, macos-15-intel, macos-26 ]
+        # os: [ ubuntu-22.04, macos-15-intel, macos-26 ]
+        os: [ macos-15-intel ]
 
     steps:
       - name: Checkout tap
@@ -32,7 +33,8 @@ jobs:
 
       - name: Build bottle
         run: |
-          brew install --build-bottle pdftl
+          # brew install --build-bottle pdftl
+          brew install --verbose --debug --build-bottle pdftl
           brew linkage --test pdftl
           brew bottle --json \
             --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
