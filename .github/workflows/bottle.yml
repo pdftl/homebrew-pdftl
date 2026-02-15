@@ -40,6 +40,20 @@ jobs:
           echo "--- Missing Dependencies ---"
           brew deps --tree pdftl
 
+      - name: Force link Python for Intel Mac
+        if: contains(matrix.os, 'macos') && contains(matrix.os, 'intel')
+        run: |
+          # 1. Use sudo to remove the specific conflicting files
+          sudo rm -f /usr/local/bin/2to3-3.12 \
+                   /usr/local/bin/idle3.12 \
+                   /usr/local/bin/pip3.12 \
+                   /usr/local/bin/pydoc3.12 \
+                   /usr/local/bin/python3.12 \
+                   /usr/local/bin/python3.12-config
+
+          # 2. Tell Homebrew to link its version into the cleared space
+          brew link --overwrite python@3.12
+
       - name: Build bottle
         run: |
           # brew install --build-bottle pdftl
