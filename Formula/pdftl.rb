@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 6
+  revision 7
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
@@ -28,7 +28,14 @@ class Pdftl < Formula
   depends_on PY_FORMULA
   depends_on "qpdf"
   depends_on "webp"
-  depends_on "zlib"
+
+  if OS.linux?
+    depends_on "libyaml"
+    depends_on "libxcb"
+    depends_on "zlib-ng"
+  else
+    depends_on "zlib"
+  end
 
   # --- Shared & Base Resources ---
   PYPI_PKGS="https://files.pythonhosted.org/packages".freeze
@@ -222,6 +229,14 @@ class Pdftl < Formula
   end
 
   def install
+    if OS.linux?
+      linux_deps = %w[libyaml libxcb zlib-ng]
+      linux_deps.each do |dep|
+        ENV.append "LDFLAGS", "-L#{Formula[dep].opt_lib}"
+        ENV.append "CPPFLAGS", "-I#{Formula[dep].opt_include}"
+      end
+    end
+
     # 1. Environment Cleanup & Compiler Setup
     ENV.delete("PYTHONPATH")
     if which("ccache")
