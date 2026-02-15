@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 3
+  revision 4
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
@@ -219,10 +219,12 @@ class Pdftl < Formula
 
   def install
     if OS.mac?
-      python = Formula["python@3.12"]
-      unless python.linked_keg.exist?
-        ohai "Linking python@3.12 manually to avoid runner conflicts..."
-        python.link
+      python_formula = Formula[PY_FORMULA]
+      unless python_formula.linked_keg.exist?
+        ohai "Linking #{PY_FORMULA} via Keg API..."
+        # Find the latest installed version (keg) and link it
+        keg = Keg.new(python_formula.prefix)
+        keg.link
       end
     end
 
