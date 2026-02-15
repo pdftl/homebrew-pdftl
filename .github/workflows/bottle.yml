@@ -40,18 +40,21 @@ jobs:
           echo "--- Missing Dependencies ---"
           brew deps --tree pdftl
 
-      - name: Force link Python for Intel Mac
-        if: contains(matrix.os, 'macos') && contains(matrix.os, 'intel')
+     - name: Force link Python for Intel Mac
+        if: runner.os == 'macOS' && runner.arch == 'X64'
         run: |
-          # 1. Use sudo to remove the specific conflicting files
+          # 1. Ensure the formula is actually in the Cellar
+          brew install python@3.12 || true
+          
+          # 2. Kill the "Zombie" files that GitHub pre-installs
           sudo rm -f /usr/local/bin/2to3-3.12 \
                    /usr/local/bin/idle3.12 \
                    /usr/local/bin/pip3.12 \
                    /usr/local/bin/pydoc3.12 \
                    /usr/local/bin/python3.12 \
                    /usr/local/bin/python3.12-config
-
-          # 2. Tell Homebrew to link its version into the cleared space
+          
+          # 3. Now that the Cellar exists and the bins are clear, link it
           brew link --overwrite python@3.12
 
       - name: Build bottle
