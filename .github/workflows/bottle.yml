@@ -40,7 +40,7 @@ jobs:
           echo "--- Missing Dependencies ---"
           brew deps --tree pdftl
 
-     - name: Force link Python for Intel Mac
+      - name: Force link Python for Intel Mac
         if: runner.os == 'macOS' && runner.arch == 'X64'
         run: |
           # 1. Ensure the formula is actually in the Cellar
