@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 9
+  revision 10
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
@@ -32,6 +32,7 @@ class Pdftl < Formula
   if OS.linux?
     depends_on "libyaml"
     depends_on "libxcb"
+    depends_on "patchelf"
     depends_on "zlib-ng-compat"
   else
     depends_on "zlib"
@@ -317,6 +318,16 @@ class Pdftl < Formula
     args = %w[--no-deps --ignore-installed]
     args << "--no-binary=:all:" if OS.linux? # Keep it consistent
     system python_exe, "-m", "pip", "install", *args, buildpath
+
+    if OS.linux?
+      ohai "Fixing RPATHs for Linux shared objects..."
+      # Find every compiled Python extension (.so file) in your virtualenv
+      Dir.glob("#{libexec}/**/*.so").each do |so|
+        # Force the binary to look in Homebrew's lib directory first
+        # This overrides the 'unwanted' system library links
+        system "patchelf", "--set-rpath", HOMEBREW_PREFIX/"lib", so
+      end
+    end
 
     bin.install_symlink libexec/"bin/pdftl"
 
