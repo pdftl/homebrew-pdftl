@@ -6,7 +6,10 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
+  revision 1
 
+  PY_VER="3.12".freeze
+  PY_FORMULA="python@#{PY_VER}".freeze
   depends_on "ccache" => :build
   depends_on "pkg-config" => :build
   depends_on "rust" => :build # for 'cryptography'
@@ -20,7 +23,7 @@ class Pdftl < Formula
   depends_on "libxslt"
   depends_on "little-cms2"
   depends_on "openjpeg"
-  depends_on "python@3.12"
+  depends_on PY_FORMULA
   depends_on "qpdf"
   depends_on "webp"
   depends_on "zlib"
@@ -215,77 +218,78 @@ class Pdftl < Formula
   end
 
   def install
-    python_f = deps.map(&:to_formula).find { |f| f.name.start_with?("python@") }
-    pyver = python_f.version.major_minor # e.g., "3.12"
-
-    # 1. Compiler Setup
-    if which("ccache")
-      ENV["CC"] = "ccache #{ENV.cc}"
-      ENV["CXX"] = "ccache #{ENV.cxx}"
-    end
-    ENV["MAKEFLAGS"] = "-j#{ENV.make_jobs}"
-    ENV["MAX_CONCURRENCY"] = ENV.make_jobs.to_s
-
-    # 2. Dependency Path Mapping
-    # Collect all dependencies we need to "map" into CPATH/LIBRARY_PATH
-    libs = %w[libxml2 libxslt libffi libtiff webp freetype].map { |name| Formula[name] }
-
-    libs.each do |f|
-      ENV.append_path "CPATH", f.opt_include
-      ENV.append_path "LIBRARY_PATH", f.opt_lib
-    end
-
-    # 3. Handle Nested/Special Includes
-    [
-      python_f.opt_include/"python#{pyver}",
-      Formula["libxml2"].opt_include/"libxml2",
-      Formula["freetype"].opt_include/"freetype2",
-      Dir[Formula["openjpeg"].opt_include/"openjpeg-*"].first,
-    ].compact.each { |path| ENV.append_path "CPATH", path }
-
-    # 4. Tool-Specific Variables
-    ENV["XML2_CONFIG"] = Formula["libxml2"].opt_bin/"xml2-config"
-    ENV["XSLT_CONFIG"] = Formula["libxslt"].opt_bin/"xslt-config"
-    ENV["PYTHON_LXML_LIBRARY_DIRECTORY"] = Formula["libxml2"].opt_lib
-
-    # Pillow Roots
-    %w[openjpeg libtiff webp].each do |name|
-      ENV["#{name.delete_prefix("lib").upcase}_ROOT"] = Formula[name].opt_prefix
-    end
-
-    venv = virtualenv_create(libexec, "python#{pyver}")
-
-    # 'high priority'/problematic resources first
-    first_resources = %w[pycparser cffi pillow lxml]
-    first_resources.each do |res|
-      ohai "Installing high-priority resource: #{res}"
-      venv.pip_install resource(res)
-    end
-
-    ohai "Installing remaining resources"
-    remaining = resources.reject { |r| first_resources.include?(r.name) }
-    venv.pip_install remaining
-
-    venv.pip_install_and_link buildpath
-
-    site_packages = libexec/"lib/python#{pyver}/site-packages"
-
-    # We use 'Language::Python.rewrite_python_shebang' style logic here
-    with_env(PYTHONPATH: site_packages) do
-      {
-        "bash" => "pdftl",
-        "zsh"  => "_pdftl",
-      }.each do |shell, completion_name|
-        path = buildpath/"pdftl.#{shell}"
-        content = Utils.safe_popen_read(bin/"pdftl", "--completion", shell)
-
-        # Replace the hardcoded Cellar version path with the stable 'opt' path
-        content.gsub!(libexec.to_s, opt_libexec.to_s)
-
-        path.write content
-        ((shell == "bash") ? bash_completion : zsh_completion).install path => completion_name
+      # 1. Environment Cleanup & Compiler Setup
+      ENV.delete("PYTHONPATH")
+      if which("ccache")
+        ENV["CC"] = "ccache #{ENV.cc}"
+        ENV["CXX"] = "ccache #{ENV.cxx}"
       end
-    end
+
+      # 2. Native Library Mapping
+      libs = %w[libxml2 libxslt libffi libtiff webp freetype].map { |name| Formula[name] }
+      libs.each do |f|
+        ENV.append_path "CPATH", f.opt_include
+        ENV.append_path "LIBRARY_PATH", f.opt_lib
+      end
+
+      # Handle specific include paths for lxml and pillow
+      [
+        Formula[PY_FORMULA].opt_include/PY_FORMULA.delete("@"),
+        Formula["libxml2"].opt_include/"libxml2",
+        Formula["freetype"].opt_include/"freetype2",
+        Dir[Formula["openjpeg"].opt_include/"openjpeg-*"].first,
+      ].compact.each { |path| ENV.append_path "CPATH", path if File.exist?(path) }
+
+      # 3. Rust & Tool Config
+      ENV.prepend_path "PATH", Formula["rust"].opt_bin
+      ENV["XML2_CONFIG"] = Formula["libxml2"].opt_bin/"xml2-config"
+      ENV["XSLT_CONFIG"] = Formula["libxslt"].opt_bin/"xslt-config"
+      %w[openjpeg libtiff webp zlib].each do |name|
+        ENV["#{name.delete_prefix("lib").upcase}_ROOT"] = Formula[name].opt_prefix
+      end
+
+      # 5. Create Venv
+      virtualenv_create(libexec, "python#{PY_VER}")
+      python_exe = libexec/"bin/python"
+      ENV.prepend_path "PATH", libexec/"bin"
+
+      # 6. Bootstrap (The way we agreed)
+      system python_exe, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel", "maturin",
+"setuptools-rust", "semantic-version", "pybind11", "Cython"
+
+      # 7. Install Resources
+      high_priority = %w[pycparser cffi cryptography pillow lxml]
+      high_priority.each do |res|
+        system python_exe, "-m", "pip", "install", "-v", "--no-build-isolation", resource(res).cached_download
+      end
+
+      remaining = resources.reject { |r| high_priority.include?(r.name) }
+      remaining.each do |res|
+        system python_exe, "-m", "pip", "install", "--no-deps", res.cached_download
+      end
+
+      # 8. MANUALLY Install the App (Instead of pip_install_and_link)
+      # This ensures the binary ends up in libexec/bin/pdftl
+      system python_exe, "-m", "pip", "install", "--no-deps", "--ignore-installed", buildpath
+
+      # Create the symlink manually so Homebrew knows about it
+      bin.install_symlink libexec/"bin/pdftl"
+
+      # 9. SHELL COMPLETIONS
+      # Now we call it exactly where we just installed it
+      internal_exe = libexec/"bin/pdftl"
+      site_packages = libexec/"lib/python#{PY_VER}/site-packages"
+
+      with_env(PYTHONPATH: site_packages) do
+        { "bash" => "pdftl", "zsh" => "_pdftl" }.each do |shell, completion_name|
+          ohai "Generating #{shell} completions"
+          content = Utils.safe_popen_read(internal_exe, "--completion", shell)
+          content.gsub!(libexec.to_s, opt_libexec.to_s)
+
+          (buildpath/"pdftl.#{shell}").write content
+          ((shell == "bash") ? bash_completion : zsh_completion).install buildpath/"pdftl.#{shell}" => completion_name
+        end
+      end
   end
 
   def caveats
@@ -303,6 +307,7 @@ class Pdftl < Formula
 
   test do
     assert_match version.to_s, shell_output("#{bin}/pdftl --version")
-    system libexec/"bin/python", "-c", "import lxml.etree; import PIL; import cffi; import pikepdf; import pdftl"
+    test_imports = %w[lxml.etree PIL cffi pikepdf pyhanko pdftl].map { |x| "import #{x}" }.join("; ")
+    system libexec/"bin/python", "-c", test_imports
   end
 end
