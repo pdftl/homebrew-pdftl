@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 13
+  revision 14
 
   PY_VER = "3.12".freeze
 
@@ -280,19 +280,65 @@ class Pdftl < Formula
 
     # 7. Link
     bin.install_symlink libexec/"bin/pdftl"
+
+    # 8. SHELL COMPLETIONS
+    internal_exe = libexec/"bin/pdftl"
+    site_packages = libexec/"lib/python#{PY_VER}/site-packages"
+
+    with_env(PYTHONPATH: site_packages) do
+      { "bash" => "pdftl", "zsh" => "_pdftl" }.each do |shell, completion_name|
+        ohai "Generating #{shell} completions"
+        content = Utils.safe_popen_read(internal_exe, "--completion", shell)
+        content.gsub!(libexec.to_s, opt_libexec.to_s)
+
+        (buildpath/"pdftl.#{shell}").write content
+        ((shell == "bash") ? bash_completion : zsh_completion).install buildpath/"pdftl.#{shell}" => completion_name
+      end
+    end
+
+
+  end
+
+  def caveats
+    <<~EOS
+      Bash users:
+        Add the following to your .bashrc:
+          [ -f #{etc}/bash_completion.d/pdftl ] && . #{etc}/bash_completion.d/pdftl
+
+      Zsh users:
+        Ensure your FPATH includes the Homebrew site-functions directory:
+          export FPATH="#{HOMEBREW_PREFIX}/share/zsh/site-functions:$FPATH"
+        Then initialize completion by adding 'autoload -Uz compinit && compinit' to your .zshrc.
+    EOS
   end
 
   test do
-    # Simple version check
-    assert_match version.to_s, shell_output("#{bin}/pdftl --version")
+    # Version checks
+    output = shell_output("#{bin}/pdftl --version")
+    assert_match version.to_s, output
+    packages = [
+      "python",
+      "pikepdf",
+      "libqpdf",
+      "cloudpickle",
+      "fonttools",
+      "lark",
+      "ocrmypdf",
+      "pyhanko",
+      "reportlab",
+    ]
+    packages.each do |pkg|
+      assert_match(/#{pkg}:?\s+\d/i, output,
+                   "Expected '#{pkg}' with version in output")
+    end
 
-    # The "Proof is in the Pudding" Import Check
     # If linking failed, these imports will crash with "symbol not found"
     system libexec/"bin/python", "-c", <<~PYTHON
       import lxml.etree
       import cryptography.hazmat.bindings._rust
       import PIL
       import yaml
+      import pdftl
     PYTHON
   end
 end
