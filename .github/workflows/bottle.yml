@@ -15,8 +15,8 @@ jobs:
 
     strategy:
       matrix:
-        # os: [ ubuntu-22.04, macos-15-intel, macos-26 ]
-        os: [ macos-15-intel ]
+        os: [ ubuntu-22.04, macos-15-intel, macos-26 ]
+        # os: [ macos-15-intel ]
 
     steps:
       - name: Checkout tap
@@ -56,9 +56,10 @@ jobs:
 
       - name: Build bottle
         run: |
-          # brew install --build-bottle pdftl
-          # brew install --verbose --build-bottle pdftl
-          brew install --verbose --build-bottle ./Formula/pdftl.rb
+          # The tap is already linked by the setup-homebrew action.
+          # Just install using the name, which forces Homebrew to use the tap version.
+          brew install --verbose --build-bottle pdftl
+
           brew linkage --test pdftl
           brew bottle --json \
             --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
@@ -93,6 +94,7 @@ jobs:
       - name: Checkout tap
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Set up Homebrew
@@ -116,6 +118,10 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+
+          # Pull latest just in case another job finished
+          git pull origin main --rebase
+
           git add Formula/pdftl.rb
           git commit -m "pdftl: update bottle block for ${GITHUB_REF_NAME}" || echo "No changes"
-          git push
+          git push origin main

@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 6
+  revision 8
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
@@ -28,7 +28,14 @@ class Pdftl < Formula
   depends_on PY_FORMULA
   depends_on "qpdf"
   depends_on "webp"
-  depends_on "zlib"
+
+  if OS.linux?
+    depends_on "libyaml"
+    depends_on "libxcb"
+    depends_on "zlib-ng"
+  else
+    depends_on "zlib"
+  end
 
   # --- Shared & Base Resources ---
   PYPI_PKGS="https://files.pythonhosted.org/packages".freeze
@@ -222,6 +229,17 @@ class Pdftl < Formula
   end
 
   def install
+    if OS.linux?
+      linux_deps = %w[libyaml libxcb zlib-ng openssl@3]
+      linux_deps.each do |dep|
+        f = Formula[dep]
+        ENV.append "LDFLAGS", "-L#{f.opt_lib}"
+        ENV.append "CPPFLAGS", "-I#{f.opt_include}"
+        ENV.append "PKG_CONFIG_PATH", "#{f.opt_lib}/pkgconfig"
+      end
+      ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
+    end
+
     # 1. Environment Cleanup & Compiler Setup
     ENV.delete("PYTHONPATH")
     if which("ccache")
@@ -270,16 +288,25 @@ class Pdftl < Formula
     # 7. Install Resources
     high_priority = %w[pycparser cffi cryptography pillow lxml]
     high_priority.each do |res|
-      system python_exe, "-m", "pip", "install", "-v", "--no-build-isolation", resource(res).cached_download
+      args = %w[-v --no-build-isolation]
+      # FORCE SOURCE BUILD ON LINUX
+      args << "--no-binary=:all:" if OS.linux?
+
+      system python_exe, "-m", "pip", "install", *args, resource(res).cached_download
     end
 
     remaining = resources.reject { |r| high_priority.include?(r.name) }
     remaining.each do |res|
-      system python_exe, "-m", "pip", "install", "--no-deps", res.cached_download
+      args = %w[--no-deps]
+      args << "--no-binary=:all:" if OS.linux?
+      system python_exe, "-m", "pip", "install", *args, res.cached_download
     end
 
     # 8. Final App Install
-    system python_exe, "-m", "pip", "install", "--no-deps", "--ignore-installed", buildpath
+    args = %w[--no-deps --ignore-installed]
+    args << "--no-binary=:all:" if OS.linux? # Keep it consistent
+    system python_exe, "-m", "pip", "install", *args, buildpath
+
     bin.install_symlink libexec/"bin/pdftl"
 
     # 9. SHELL COMPLETIONS
