@@ -6,14 +6,15 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 11
+  revision 13
 
-  PY_VER="3.12".freeze
-  PY_FORMULA="python@#{PY_VER}".freeze
+  PY_VER = "3.12".freeze
 
-  depends_on "ccache" => :build
+  depends_on "python@#{PY_VER}"
+  depends_on "rust" => :build
   depends_on "pkg-config" => :build
-  depends_on "rust" => :build # for 'cryptography'
+
+  # Native Dependencies
   depends_on "freetype"
   depends_on "jpeg-turbo"
   depends_on "libffi"
@@ -25,18 +26,20 @@ class Pdftl < Formula
   depends_on "little-cms2"
   depends_on "openjpeg"
   depends_on "openssl@3"
-  depends_on PY_FORMULA
   depends_on "qpdf"
   depends_on "webp"
 
   if OS.linux?
     depends_on "libyaml"
     depends_on "libxcb"
-    depends_on "patchelf" => :build
     depends_on "zlib-ng-compat"
   else
     depends_on "zlib"
   end
+
+  # --- Resources ---
+  # YOU MUST INCLUDE ALL RESOURCE BLOCKS HERE.
+  # Ensure you include 'maturin', 'setuptools-rust', 'cffi' in your resources list.
 
   # --- Shared & Base Resources ---
   PYPI_PKGS="https://files.pythonhosted.org/packages".freeze
@@ -230,145 +233,66 @@ class Pdftl < Formula
   end
 
   def install
-    if OS.linux?
-      # 1. Isolate pkg-config (ChatGPT's good advice)
-      ENV.delete("PKG_CONFIG_PATH")
-      linux_deps = %w[libyaml libxcb zlib-ng-compat openssl@3 libffi]
-      ENV["PKG_CONFIG_LIBDIR"] = linux_deps.map { |d| "#{Formula[d].opt_lib}/pkgconfig" }.join(":")
-
-      # 2. Force the Linker and Compiler
-      linux_deps.each do |dep|
-        f = Formula[dep]
-        # Using the comma form -Wl,-rpath,PATH
-        ENV.append "LDFLAGS", "-L#{f.opt_lib} -Wl,-rpath,#{f.opt_lib}"
-        ENV.append "CPPFLAGS", "-I#{f.opt_include}"
-      end
-
-      # 3. Python-specific overrides
-      ENV["PYYAML_FORCE_LIBYAML"] = "1"
-      ENV["YAML_ROOT"] = Formula["libyaml"].opt_prefix
-      ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
-    end
-
-    # 1. Environment Cleanup & Compiler Setup
+    # 1. Clean Environment
     ENV.delete("PYTHONPATH")
-    if which("ccache")
-      ENV["CC"] = "ccache #{ENV.cc}"
-      ENV["CXX"] = "ccache #{ENV.cxx}"
-    end
 
-    # 2. Native Library Mapping
-    libs_names = %w[libxml2 libxslt libffi libtiff webp freetype openssl@3]
-    libs_names << "libyaml" if OS.linux?
+    # 2. Critical Build Flags
+    # We disable isolation to control the build tools manually.
+    ENV["PIP_NO_BUILD_ISOLATION"] = "1"
+    ENV["PIP_NO_BINARY"] = ":all:"
+    ENV["PIP_IGNORE_INSTALLED"] = "1"
 
-    libs = libs_names.map { |name| Formula[name] }
-    libs.each do |f|
-      ENV.append_path "CPATH", f.opt_include
-      ENV.append_path "LIBRARY_PATH", f.opt_lib
-      ENV.append "LDFLAGS", "-L#{f.opt_lib} -Wl,-rpath=#{f.opt_lib}" if OS.linux?
-    end
+    # We keep this ONE flag because PyYAML ignores pkg-config without it.
+    ENV["PYYAML_FORCE_LIBYAML"] = "1"
 
-    # Handle specific include paths for lxml and pillow
-    [
-      Formula[PY_FORMULA].opt_include/PY_FORMULA.delete("@"),
-      Formula["libxml2"].opt_include/"libxml2",
-      Formula["freetype"].opt_include/"freetype2",
-      Dir[Formula["openjpeg"].opt_include/"openjpeg-*"].first,
-    ].compact.each { |path| ENV.append_path "CPATH", path if File.exist?(path) }
+    # 3. Create Virtualenv
+    # We use the raw command to ensure a vanilla venv
+    python3 = "python#{PY_VER}"
+    system python3, "-m", "venv", libexec
+    venv_python = libexec/"bin/python"
 
-    # 3. Rust & Tool Config
-    ENV.prepend_path "PATH", Formula["rust"].opt_bin
-    ENV["XML2_CONFIG"] = Formula["libxml2"].opt_bin/"xml2-config"
-    ENV["XSLT_CONFIG"] = Formula["libxslt"].opt_bin/"xslt-config"
-    %w[openjpeg libtiff webp].each do |name|
-      ENV["#{name.delete_prefix("lib").upcase}_ROOT"] = Formula[name].opt_prefix
-    end
-    # Use the correct zlib formula name based on the OS
-    zlib_formula = OS.linux? ? "zlib-ng-compat" : "zlib"
-    ENV["ZLIB_ROOT"] = Formula[zlib_formula].opt_prefix
-
-    # 5. Create Venv (The "Manual" Way to ensure pip is included)
-    # We use the raw python command to ensure a standard venv
-    system Formula[PY_FORMULA].opt_bin/"python#{PY_VER}", "-m", "venv", libexec
-
-    python_exe = libexec/"bin/python"
-    # Ensure pip is actually there and updated
-    system python_exe, "-m", "ensurepip", "--upgrade"
-    system python_exe, "-m", "pip", "install", "--upgrade", "pip"
-
-    ENV.prepend_path "PATH", libexec/"bin"
-
-    # 6. Bootstrap Build Tools
-    system python_exe, "-m", "pip", "install", "setuptools", "wheel", "maturin",
-           "setuptools-rust", "semantic-version", "pybind11", "Cython"
-
-    # 7. Install Resources
-    high_priority = %w[pycparser cffi cryptography pillow lxml PyYAML]
-    high_priority.each do |res|
-      args = %w[-v --no-build-isolation]
-      # FORCE SOURCE BUILD ON LINUX
-      args << "--no-binary=:all:" if OS.linux?
-
-      system python_exe, "-m", "pip", "install", *args, resource(res).cached_download
-    end
-
-    remaining = resources.reject { |r| high_priority.include?(r.name) }
-    remaining.each do |res|
-      args = %w[--no-deps]
-      args << "--no-binary=:all:" if OS.linux?
-      system python_exe, "-m", "pip", "install", *args, res.cached_download
-    end
-
-    # 8. Final App Install
-    args = %w[--no-deps --ignore-installed]
-    args << "--no-binary=:all:" if OS.linux? # Keep it consistent
-    system python_exe, "-m", "pip", "install", *args, buildpath
-
-    if OS.linux?
-      ohai "Fixing RPATHs for Linux shared objects..."
-      # Find every compiled Python extension (.so file) in your virtualenv
-      Dir.glob("#{libexec}/**/*.so").each do |so|
-        # Force the binary to look in Homebrew's lib directory first
-        # This overrides the 'unwanted' system library links
-        system "patchelf", "--set-rpath", HOMEBREW_PREFIX/"lib", so
+    # 4. Install Build Backends FIRST (The Hybrid Fix)
+    # We explicitly install the tools that 'pip' would have tried to download automatically.
+    # This prevents the "BackendUnavailable" crash.
+    build_tools = %w[setuptools wheel cffi maturin setuptools-rust]
+    build_tools.each do |tool_name|
+      # If you have these as resources, stage and install them:
+      if (r = resources.find { |res| res.name == tool_name })
+        r.stage { system venv_python, "-m", "pip", "install", "." }
+      else
+        # Fallback if they are provided by python@3.12 (like setuptools/wheel)
+        # usually setuptools/wheel are in the venv, but we ensure they are updated.
+        system venv_python, "-m", "pip", "install", tool_name
       end
     end
 
+    # 5. Install Remaining Resources
+    resources.each do |r|
+      next if build_tools.include?(r.name) # Skip what we already installed
+
+      r.stage do
+        system venv_python, "-m", "pip", "install", "."
+      end
+    end
+
+    # 6. Install the Application
+    system venv_python, "-m", "pip", "install", "."
+
+    # 7. Link
     bin.install_symlink libexec/"bin/pdftl"
-
-    # 9. SHELL COMPLETIONS
-    # Now we call it exactly where we just installed it
-    internal_exe = libexec/"bin/pdftl"
-    site_packages = libexec/"lib/python#{PY_VER}/site-packages"
-
-    with_env(PYTHONPATH: site_packages) do
-      { "bash" => "pdftl", "zsh" => "_pdftl" }.each do |shell, completion_name|
-        ohai "Generating #{shell} completions"
-        content = Utils.safe_popen_read(internal_exe, "--completion", shell)
-        content.gsub!(libexec.to_s, opt_libexec.to_s)
-
-        (buildpath/"pdftl.#{shell}").write content
-        ((shell == "bash") ? bash_completion : zsh_completion).install buildpath/"pdftl.#{shell}" => completion_name
-      end
-    end
-  end
-
-  def caveats
-    <<~EOS
-      Bash users:
-        Add the following to your .bashrc:
-          [ -f #{etc}/bash_completion.d/pdftl ] && . #{etc}/bash_completion.d/pdftl
-
-      Zsh users:
-        Ensure your FPATH includes the Homebrew site-functions directory:
-          export FPATH="#{HOMEBREW_PREFIX}/share/zsh/site-functions:$FPATH"
-        Then initialize completion by adding 'autoload -Uz compinit && compinit' to your .zshrc.
-    EOS
   end
 
   test do
+    # Simple version check
     assert_match version.to_s, shell_output("#{bin}/pdftl --version")
-    test_imports = %w[lxml.etree PIL cffi pikepdf pyhanko pdftl].map { |x| "import #{x}" }.join("; ")
-    system libexec/"bin/python", "-c", test_imports
+
+    # The "Proof is in the Pudding" Import Check
+    # If linking failed, these imports will crash with "symbol not found"
+    system libexec/"bin/python", "-c", <<~PYTHON
+      import lxml.etree
+      import cryptography.hazmat.bindings._rust
+      import PIL
+      import yaml
+    PYTHON
   end
 end
