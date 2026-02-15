@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 2
+  revision 3
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
@@ -218,9 +218,12 @@ class Pdftl < Formula
   end
 
   def install
-    if OS.mac? && !Formula[PY_FORMULA].linked_keg.exist?
-      ohai "Fixing Python linkage for macOS runner..."
-      system "brew", "link", "--overwrite", PY_FORMULA
+    if OS.mac?
+      python = Formula["python@3.12"]
+      unless python.linked_keg.exist?
+        ohai "Linking python@3.12 manually to avoid runner conflicts..."
+        python.link
+      end
     end
 
     # 1. Environment Cleanup & Compiler Setup
