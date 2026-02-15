@@ -45,7 +45,7 @@ jobs:
         run: |
           # 1. Ensure the formula is actually in the Cellar
           brew install python@3.12 || true
-          
+
           # 2. Kill the "Zombie" files that GitHub pre-installs
           sudo rm -f /usr/local/bin/2to3-3.12 \
                    /usr/local/bin/idle3.12 \
@@ -53,7 +53,7 @@ jobs:
                    /usr/local/bin/pydoc3.12 \
                    /usr/local/bin/python3.12 \
                    /usr/local/bin/python3.12-config
-          
+
           # 3. Now that the Cellar exists and the bins are clear, link it
           brew link --overwrite python@3.12
 
