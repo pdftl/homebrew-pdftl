@@ -43,7 +43,7 @@ jobs:
       - name: Build bottle
         run: |
           # brew install --build-bottle pdftl
-          brew install --verbose --debug --build-bottle pdftl
+          brew install --verbose --build-bottle pdftl
           brew linkage --test pdftl
           brew bottle --json \
             --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
