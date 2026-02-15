@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 10
+  revision 11
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
@@ -32,7 +32,7 @@ class Pdftl < Formula
   if OS.linux?
     depends_on "libyaml"
     depends_on "libxcb"
-    depends_on "patchelf"
+    depends_on "patchelf" => :build
     depends_on "zlib-ng-compat"
   else
     depends_on "zlib"
@@ -231,21 +231,23 @@ class Pdftl < Formula
 
   def install
     if OS.linux?
-      # 1. Clear out system-level flags that might be lurking
-      ENV.delete("LD_LIBRARY_PATH")
+      # 1. Isolate pkg-config (ChatGPT's good advice)
+      ENV.delete("PKG_CONFIG_PATH")
+      linux_deps = %w[libyaml libxcb zlib-ng-compat openssl@3 libffi]
+      ENV["PKG_CONFIG_LIBDIR"] = linux_deps.map { |d| "#{Formula[d].opt_lib}/pkgconfig" }.join(":")
 
-      linux_deps = %w[libyaml libxcb zlib-ng-compat openssl@3]
+      # 2. Force the Linker and Compiler
       linux_deps.each do |dep|
         f = Formula[dep]
-        # We use -Wl,-rpath to bake the Homebrew path into the binary itself
-        ENV.append "LDFLAGS", "-L#{f.opt_lib} -Wl,-rpath=#{f.opt_lib}"
+        # Using the comma form -Wl,-rpath,PATH
+        ENV.append "LDFLAGS", "-L#{f.opt_lib} -Wl,-rpath,#{f.opt_lib}"
         ENV.append "CPPFLAGS", "-I#{f.opt_include}"
-        ENV.append "PKG_CONFIG_PATH", "#{f.opt_lib}/pkgconfig"
       end
 
-      ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
-      # YAML_ROOT is specifically looked for by the PyYAML build script
+      # 3. Python-specific overrides
+      ENV["PYYAML_FORCE_LIBYAML"] = "1"
       ENV["YAML_ROOT"] = Formula["libyaml"].opt_prefix
+      ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
     end
 
     # 1. Environment Cleanup & Compiler Setup
@@ -256,7 +258,10 @@ class Pdftl < Formula
     end
 
     # 2. Native Library Mapping
-    libs = %w[libxml2 libxslt libffi libtiff webp freetype openssl@3].map { |name| Formula[name] }
+    libs_names = %w[libxml2 libxslt libffi libtiff webp freetype openssl@3]
+    libs_names << "libyaml" if OS.linux?
+
+    libs = libs_names.map { |name| Formula[name] }
     libs.each do |f|
       ENV.append_path "CPATH", f.opt_include
       ENV.append_path "LIBRARY_PATH", f.opt_lib
@@ -298,7 +303,7 @@ class Pdftl < Formula
            "setuptools-rust", "semantic-version", "pybind11", "Cython"
 
     # 7. Install Resources
-    high_priority = %w[pycparser cffi cryptography pillow lxml]
+    high_priority = %w[pycparser cffi cryptography pillow lxml PyYAML]
     high_priority.each do |res|
       args = %w[-v --no-build-isolation]
       # FORCE SOURCE BUILD ON LINUX
