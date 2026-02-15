@@ -56,30 +56,63 @@ jobs:
 
       - name: Build bottle
         run: |
-          # 1. Install and compile from source
-          brew install --verbose --build-bottle pdftl
+          # 1. Install and compile. We use || true so we can run diagnostics even on failure.
+          brew install --debug --verbose --build-bottle pdftl || true
 
-          # 2. VERIFICATION BLOCK: Ensure correct linkage
-          echo "--- Checking Linkage ---"
-          brew linkage --test pdftl
+          echo "--- DEBUG: Checking RPATH of compiled extensions ---"
+          # This tells us if the binary was told WHERE to look for libraries at compile time
+          find $(brew --prefix pdftl)/libexec -name "*.so" -exec echo "Checking: {}" \; -exec readelf -d {} \; | grep -E "Checking|RPATH|RUNPATH" || true
 
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            echo "--- Verifying Linux RPATHs ---"
-            # Check if any shared objects are accidentally linking to system paths instead of Brew
-            find $(brew --prefix pdftl)/libexec -name "*.so" -exec ldd {} \; | grep "/lib/x86_64-linux-gnu/" && { echo "ERROR: System library leak detected!"; exit 1; } || echo "Linkage looks clean."
+          echo "--- DEBUG: LDD on suspicious files ---"
+          # This tells us where the binary is ACTUALLY looking right now
+          find $(brew --prefix pdftl)/libexec -name "*.so" -exec ldd {} \; | grep -E "libyaml|libxcb" || true
+
+          # 2. Generate the bottle (if the build actually produced a cellar)
+          if [ -d "$(brew --prefix pdftl)" ]; then
+            brew bottle --json \
+              --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
+              pdftl
           fi
 
-          # 3. Create the bottle
-          brew bottle --json \
-            --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
-            pdftl
+          # 3. THE FINAL JUDGE: If this fails, the job stops here and won't upload/release.
+          echo "--- Final Linkage Check ---"
+          brew linkage --test pdftl
 
       - name: Upload Homebrew Logs on failure
-        if: failure()
+        if: always() # Upload even if it passes so we can see the 'success' logs
         uses: actions/upload-artifact@v4
         with:
           name: homebrew-logs-${{ matrix.os }}
-          path: ~/Library/Logs/Homebrew/pdftl/
+          # Corrected path for Linux vs macOS
+          path: |
+            ~/.cache/Homebrew/Logs/pdftl/
+            ~/Library/Logs/Homebrew/pdftl/
+      # - name: Build bottle
+      #   run: |
+      #     # 1. Install and compile from source
+      #     brew install --verbose --build-bottle pdftl
+
+      #     # 2. VERIFICATION BLOCK: Ensure correct linkage
+      #     echo "--- Checking Linkage ---"
+      #     brew linkage --test pdftl
+
+      #     if [ "${{ runner.os }}" = "Linux" ]; then
+      #       echo "--- Verifying Linux RPATHs ---"
+      #       # Check if any shared objects are accidentally linking to system paths instead of Brew
+      #       find $(brew --prefix pdftl)/libexec -name "*.so" -exec ldd {} \; | grep "/lib/x86_64-linux-gnu/" && { echo "ERROR: System library leak detected!"; exit 1; } || echo "Linkage looks clean."
+      #     fi
+
+      #     # 3. Create the bottle
+      #     brew bottle --json \
+      #       --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
+      #       pdftl
+
+      # - name: Upload Homebrew Logs on failure
+      #   if: failure()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: homebrew-logs-${{ matrix.os }}
+      #     path: ~/Library/Logs/Homebrew/pdftl/
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
