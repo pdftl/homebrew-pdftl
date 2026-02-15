@@ -56,9 +56,15 @@ jobs:
 
       - name: Build bottle
         run: |
-          # brew install --build-bottle pdftl
-          # brew install --verbose --build-bottle pdftl
-          brew install --verbose --build-bottle ./Formula/pdftl.rb
+          # 1. Manually create the tap directory structure if it's missing 
+          # (Homebrew expects taps at /usr/local/Homebrew/Library/Taps/user/repo)
+          mkdir -p $(brew --repository)/Library/Taps/pdftl/homebrew-pdftl
+          cp -R . $(brew --repository)/Library/Taps/pdftl/homebrew-pdftl
+          
+          # 2. Now install using the fully qualified name
+          brew install --verbose --build-bottle pdftl/pdftl/pdftl
+          
+          # 3. Standard linkage and bottle steps
           brew linkage --test pdftl
           brew bottle --json \
             --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
