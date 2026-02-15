@@ -15,8 +15,8 @@ jobs:
 
     strategy:
       matrix:
-        # os: [ ubuntu-22.04, macos-15-intel, macos-26 ]
-        os: [ macos-15-intel ]
+        os: [ ubuntu-22.04, macos-15-intel, macos-26 ]
+        # os: [ macos-15-intel ]
 
     steps:
       - name: Checkout tap
@@ -56,10 +56,20 @@ jobs:
 
       - name: Build bottle
         run: |
-          # brew install --build-bottle pdftl
-          # brew install --verbose --build-bottle pdftl
-          brew install --verbose --build-bottle ./Formula/pdftl.rb
+          # 1. Install and compile from source
+          brew install --verbose --build-bottle pdftl
+
+          # 2. VERIFICATION BLOCK: Ensure correct linkage
+          echo "--- Checking Linkage ---"
           brew linkage --test pdftl
+
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            echo "--- Verifying Linux RPATHs ---"
+            # Check if any shared objects are accidentally linking to system paths instead of Brew
+            find $(brew --prefix pdftl)/libexec -name "*.so" -exec ldd {} \; | grep "/lib/x86_64-linux-gnu/" && { echo "ERROR: System library leak detected!"; exit 1; } || echo "Linkage looks clean."
+          fi
+
+          # 3. Create the bottle
           brew bottle --json \
             --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
             pdftl
@@ -93,6 +103,7 @@ jobs:
       - name: Checkout tap
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Set up Homebrew
@@ -116,6 +127,10 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+
+          # Pull latest just in case another job finished
+          git pull origin main --rebase
+
           git add Formula/pdftl.rb
           git commit -m "pdftl: update bottle block for ${GITHUB_REF_NAME}" || echo "No changes"
-          git push
+          git push origin main
