@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 18
+  revision 19
 
   PY_VER = "3.12".freeze
 
@@ -42,8 +42,8 @@ class Pdftl < Formula
   # the environment is ready for compiling complex extensions like cryptography.
 
   resource "semantic_version" do
-    url "#{PYPI_PKGS}/3a/27/b101686940dfd9e60243e86f91724227e573030232b70f1a9437b7700e47/semantic_version-2.10.0.tar.gz"
-    sha256 "bdabbb9500912ec1799a6745507c3315758eb093557e056910606f362145d475"
+    url = "#{PYPI_PKGS}/7d/31/f2289ce78b9b473d582568c234e104d2a342fd658cc288a7553d83bb8595/semantic_version-2.10.0.tar.gz"
+    sha256 "bdabb6d336998cbb378d4b9db3a4b56a1e3235701dc05ea2690d9a997ed5041c"
   end
 
   resource "setuptools-rust" do
