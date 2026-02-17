@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 19
+  revision 20
 
   PY_VER = "3.12".freeze
 
@@ -255,8 +255,7 @@ class Pdftl < Formula
     # 2. Standard Homebrew Virtualenv Creation
     venv = virtualenv_create(libexec, "python#{PY_VER}")
 
-    # 3. Install Base Build Tools (explicitly first)
-    venv.pip_install "wheel", "setuptools"
+    # 3. NOTHING
 
     # 4. Bootstrap Build Chain (Order Sensitive)
     #    We must install these individually to ensure they are present
