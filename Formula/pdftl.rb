@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 16
+  revision 17
 
   PY_VER = "3.12".freeze
 
@@ -47,7 +47,7 @@ class Pdftl < Formula
   end
 
   resource "setuptools-rust" do
-    url "#{PYPI_PKGS}bc/c4/8d3d282cee60d3ea0369fa15ce27387810040360adb4133e31990a7a2aba/setuptools_rust-1.12.0.tar.gz"
+    url "#{PYPI_PKGS}/bc/c4/8d3d282cee60d3ea0369fa15ce27387810040360adb4133e31990a7a2aba/setuptools_rust-1.12.0.tar.gz"
     sha256 "d94a93f0c97751c17014565f07bdc324bee45d396cd1bba83d8e7af92b945f0c"
   end
 
