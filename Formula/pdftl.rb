@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 17
+  revision 18
 
   PY_VER = "3.12".freeze
 
@@ -14,7 +14,7 @@ class Pdftl < Formula
   depends_on "pkg-config" => :build
   depends_on "rust" => :build
 
-  # Native Dependencies (Critical for wheels to link against)
+  # Native Dependencies
   depends_on "freetype"
   depends_on "jpeg-turbo"
   depends_on "libffi"
@@ -32,23 +32,28 @@ class Pdftl < Formula
   if OS.linux?
     depends_on "libyaml"
     depends_on "libxcb"
-    depends_on "zlib-ng-compat"
-  else
-    depends_on "zlib"
   end
+  depends_on "zlib"
 
-  PYPI_PKGS="https://files.pythonhosted.org/packages".freeze
+  PYPI_PKGS = "https://files.pythonhosted.org/packages".freeze
 
+  # --- Build Tool Chain ---
+  # These are manually bootstrapped in the install method to ensure
+  # the environment is ready for compiling complex extensions like cryptography.
 
-  # --- Build Tools (MUST be installed first) ---
-  resource "maturin" do
-    url "#{PYPI_PKGS}/ae/13/aeff8a21835ed0e40c329c286750fcdcdcbf231f1a5cb327378666c5def6/maturin-1.12.2.tar.gz"
-    sha256 "d6253079f53dbb692395a13abddc0f2d3d96af32f8c0b32e2912849713c55794"
+  resource "semantic_version" do
+    url "#{PYPI_PKGS}/3a/27/b101686940dfd9e60243e86f91724227e573030232b70f1a9437b7700e47/semantic_version-2.10.0.tar.gz"
+    sha256 "bdabbb9500912ec1799a6745507c3315758eb093557e056910606f362145d475"
   end
 
   resource "setuptools-rust" do
     url "#{PYPI_PKGS}/bc/c4/8d3d282cee60d3ea0369fa15ce27387810040360adb4133e31990a7a2aba/setuptools_rust-1.12.0.tar.gz"
     sha256 "d94a93f0c97751c17014565f07bdc324bee45d396cd1bba83d8e7af92b945f0c"
+  end
+
+  resource "maturin" do
+    url "#{PYPI_PKGS}/ae/13/aeff8a21835ed0e40c329c286750fcdcdcbf231f1a5cb327378666c5def6/maturin-1.12.2.tar.gz"
+    sha256 "d6253079f53dbb692395a13abddc0f2d3d96af32f8c0b32e2912849713c55794"
   end
 
   # --- Runtime Resources ---
@@ -57,7 +62,6 @@ class Pdftl < Formula
     url "#{PYPI_PKGS}/1f/42/5c74462b4fd957fcd7b13b04fb3205ff8349236ea74c7c375766d6c82288/pillow-12.1.1.tar.gz"
     sha256 "9ad8fa5937ab05218e2b6a4cff30295ad35afd2f83ac592e68c0d871bb0fdbc4"
   end
-
 
   resource "img2pdf" do
     url "#{PYPI_PKGS}/8e/97/ca44c467131b93fda82d2a2f21b738c8bcf63b5259e3b8250e928b8dd52a/img2pdf-0.6.3.tar.gz"
@@ -99,7 +103,6 @@ class Pdftl < Formula
     sha256 "5379eb6e1aba4088bae84f8242960017ec8d8e3decf30480b3a1abdaa9671a3f"
   end
 
-  # --- Compiled/C-Extension Resources ---
   resource "cffi" do
     url "#{PYPI_PKGS}/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz"
     sha256 "44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529"
@@ -120,7 +123,6 @@ class Pdftl < Formula
     sha256 "600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"
   end
 
-  # --- pdftl Core Resources ---
   resource "cloudpickle" do
     url "#{PYPI_PKGS}/27/fb/576f067976d320f5f0114a8d9fa1215425441bb35627b1993e5afd8111e5/cloudpickle-3.1.2.tar.gz"
     sha256 "7fda9eb655c9c230dab534f1983763de5835249750e85fbcef43aaa30a9a2414"
@@ -206,7 +208,6 @@ class Pdftl < Formula
     sha256 "5fdcb09bf6db023d88f312bd0767594b414655d58090fc1c46b3414415f67fac"
   end
 
-  # --- pyhanko Unique Resources ---
   resource "asn1crypto" do
     url "#{PYPI_PKGS}/de/cf/d547feed25b5244fcb9392e288ff9fdc3280b10260362fc45d37a798a6ee/asn1crypto-1.5.1.tar.gz"
     sha256 "13ae38502be632115abf8a24cbe5f4da52e3b5231990aff31123c805306ccb9c"
@@ -243,77 +244,65 @@ class Pdftl < Formula
   end
 
   def install
-    # 1. Clean Environment
     ENV.delete("PYTHONPATH")
 
-    # 2. Build Flags
-    # Critical: Disable isolation so we control the build tools.
-    # Critical: Disable binary to force linking against Homebrew system libs.
+    # 1. Strict Policies
     ENV["PIP_NO_BUILD_ISOLATION"] = "1"
     ENV["PIP_NO_BINARY"] = ":all:"
     ENV["PIP_IGNORE_INSTALLED"] = "1"
     ENV["PYYAML_FORCE_LIBYAML"] = "1"
 
-    # 3. Create Virtualenv
-    python3 = "python#{PY_VER}"
-    system python3, "-m", "venv", libexec
-    venv_python = libexec/"bin/python"
+    # 2. Standard Homebrew Virtualenv Creation
+    venv = virtualenv_create(libexec, "python#{PY_VER}")
 
-    # 4. Install Build Backends FIRST
-    # We manually install these to satisfy the build environment.
-    build_tools = %w[setuptools wheel cffi maturin setuptools-rust]
-    
-    # Base tools
-    system venv_python, "-m", "pip", "install", "wheel", "setuptools", "cffi"
+    # 3. Install Base Build Tools (explicitly first)
+    venv.pip_install "wheel", "setuptools"
 
-    # Complex build tools (from resources)
-    resources.each do |r|
-      if %w[maturin setuptools-rust].include?(r.name)
-        r.stage { system venv_python, "-m", "pip", "install", "." }
-      end
-    end
+    # 4. Bootstrap Build Chain (Order Sensitive)
+    #    We must install these individually to ensure they are present
+    #    when the subsequent resources (like cryptography) need them.
+    #    'semantic_version' and 'typing-extensions' are required for setuptools-rust
+    #    in this non-isolated environment.
+    build_chain = %w[semantic_version typing-extensions setuptools-rust maturin]
+
+    venv.pip_install resource("semantic_version")
+    venv.pip_install resource("typing-extensions")
+    venv.pip_install resource("setuptools-rust")
+    venv.pip_install resource("maturin")
 
     # 5. Install Runtime Resources
-    # This loop installs Pillow/img2pdf using the global flags (NO_BINARY, NO_ISOLATION)
+    #    We loop through all resources but skip the ones we just installed.
     resources.each do |r|
-      next if %w[maturin setuptools-rust].include?(r.name)
-      r.stage do
-        system venv_python, "-m", "pip", "install", "."
-      end
+      next if build_chain.include?(r.name)
+
+      venv.pip_install r
     end
 
-    # 6. Install Main Application (THE FIX)
-    # We add --no-deps so it doesn't search for things we missed.
-    # We add --no-build-isolation so it uses the build tools we just installed.
-    system venv_python, "-m", "pip", "install", 
-           "--no-deps", 
-           "--no-build-isolation", 
+    # 6. Install Main Package
+    #    We use system execution here to forcefully inject --no-deps and --no-build-isolation
+    #    which protects against accidental network fetches or isolation rebuilds.
+    system libexec/"bin/python", "-m", "pip", "install",
+           "--no-deps",
+           "--no-build-isolation",
            "."
 
     # 7. Link Executable
     bin.install_symlink libexec/"bin/pdftl"
-    
-    # 8. Completions
-    site_packages = Language::Python.site_packages(python3)
-    pth_contents = "import site; site.addsitedir('#{libexec/site_packages}')\n"
-    (libexec/site_packages/"homebrew-pdftl.pth").write pth_contents
 
-    with_env(PYTHONPATH: libexec/site_packages) do
-      if (bash_comp = Utils.safe_popen_read(libexec/"bin/pdftl", "--completion", "bash"))
-        (buildpath/"pdftl.bash").write bash_comp
-        bash_completion.install "pdftl.bash" => "pdftl"
-      end
-      if (zsh_comp = Utils.safe_popen_read(libexec/"bin/pdftl", "--completion", "zsh"))
-        (buildpath/"_pdftl").write zsh_comp
-        zsh_completion.install "_pdftl"
-      end
+    # 8. Completions
+    if (bash_comp = Utils.safe_popen_read(libexec/"bin/pdftl", "--completion", "bash"))
+      (buildpath/"pdftl.bash").write bash_comp
+      bash_completion.install "pdftl.bash" => "pdftl"
+    end
+    if (zsh_comp = Utils.safe_popen_read(libexec/"bin/pdftl", "--completion", "zsh"))
+      (buildpath/"_pdftl").write zsh_comp
+      zsh_completion.install "_pdftl"
     end
   end
 
   test do
     assert_match version.to_s, shell_output("#{bin}/pdftl --version")
-    
-    # Verify linking
+
     system libexec/"bin/python", "-c", <<~PYTHON
       import lxml.etree
       from cryptography.hazmat.backends import default_backend
