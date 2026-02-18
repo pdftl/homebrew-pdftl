@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 25
+  revision 26
 
   PY_VER = "3.12".freeze
 
@@ -281,10 +281,14 @@ def install
     # 3. Install Standard Runtime Resources
     #    We use system pip with --no-build-isolation to force usage of the 
     #    build tools we just bootstrapped in step 1.
+
+    ENV["PYTHONPATH"] = libexec/"lib/python#{PY_VER}/site-packages"
+
+
     resources.each do |r|
       next if build_chain.include?(r.name) || delayed_resources.include?(r.name)
 
-      system libexec/"bin/python", "-m", "pip", "install",
+      system libexec/"bin/pip", "install",
              "--no-deps",
              "--no-index",
              "--no-build-isolation",
