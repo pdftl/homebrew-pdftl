@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 21
+  revision 23
 
   PY_VER = "3.12".freeze
 
@@ -54,6 +54,16 @@ class Pdftl < Formula
   resource "maturin" do
     url "#{PYPI_PKGS}/ae/13/aeff8a21835ed0e40c329c286750fcdcdcbf231f1a5cb327378666c5def6/maturin-1.12.2.tar.gz"
     sha256 "d6253079f53dbb692395a13abddc0f2d3d96af32f8c0b32e2912849713c55794"
+  end
+
+  resource "setuptools-scm" do
+    url "#{PYPI_PKGS}/7b/b1/19587742aad604f1988a8a362e660e8c3ac03adccdb71c96d86526e5eb62/setuptools_scm-9.2.2.tar.gz"
+    sha256 "1c674ab4665686a0887d7e24c03ab25f24201c213e82ea689d2f3e169ef7ef57"
+  end
+
+  resource "wheel" do
+    url "#{PYPI_PKGS}/89/24/a2eb353a6edac9a0303977c4cb048134959dd2a51b48a269dfc9dde00c8a/wheel-0.46.3.tar.gz"
+    sha256 "e3e79874b07d776c40bd6033f8ddf76a7dad46a7b8aa1b2787a83083519a1803"
   end
 
   # --- Runtime Resources ---
@@ -163,11 +173,6 @@ class Pdftl < Formula
     sha256 "bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba"
   end
 
-  resource "ocrmypdf" do
-    url "#{PYPI_PKGS}/8c/52/be1aaece0703a736757d8957c0d4f19c37561054169b501eb0e7132f15e5/ocrmypdf-16.13.0.tar.gz"
-    sha256 "29d37e915234ce717374863a9cc5dd32d29e063dfe60c51380dda71254c88248"
-  end
-
   resource "pdfminer-six" do
     url "#{PYPI_PKGS}/34/a4/5cec1112009f0439a5ca6afa8ace321f0ab2f48da3255b7a1c8953014670/pdfminer_six-20260107.tar.gz"
     sha256 "96bfd431e3577a55a0efd25676968ca4ce8fd5b53f14565f85716ff363889602"
@@ -243,52 +248,64 @@ class Pdftl < Formula
     sha256 "68ea123efd6612420fd2f1856c0b7a4bfa70f4af0abc0ddb329416844f5befb6"
   end
 
-  def install
-    ENV.delete("PYTHONPATH")
+  resource "ocrmypdf" do
+    url "#{PYPI_PKGS}/8c/52/be1aaece0703a736757d8957c0d4f19c37561054169b501eb0e7132f15e5/ocrmypdf-16.13.0.tar.gz"
+    sha256 "29d37e915234ce717374863a9cc5dd32d29e063dfe60c51380dda71254c88248"
+  end
 
-    # 1. Strict Policies
-    ENV["PIP_NO_BUILD_ISOLATION"] = "1"
+
+def install
+    ENV.delete("PYTHONPATH")
     ENV["PIP_NO_BINARY"] = ":all:"
     ENV["PIP_IGNORE_INSTALLED"] = "1"
     ENV["PYYAML_FORCE_LIBYAML"] = "1"
 
-    # 2. Standard Homebrew Virtualenv Creation
     venv = virtualenv_create(libexec, "python#{PY_VER}")
 
-    # 3. NOTHING
-
-    # 4. Bootstrap Build Chain (Order Sensitive)
-    #    We must install these individually to ensure they are present
-    #    when the subsequent resources (like cryptography) need them.
-    #    'semantic_version' and 'typing-extensions' are required for setuptools-rust
-    #    in this non-isolated environment.
-    build_chain = %w[semantic_version typing-extensions setuptools-rust maturin]
-
-    venv.pip_install resource("semantic_version")
-    venv.pip_install resource("typing-extensions")
-    venv.pip_install resource("setuptools-rust")
-    venv.pip_install resource("maturin")
-
-    # 5. Install Runtime Resources
-    #    We loop through all resources but skip the ones we just installed.
-    resources.each do |r|
-      next if build_chain.include?(r.name)
-
-      venv.pip_install r
+    # 1. Bootstrap Build Tools (Safe/Fast)
+    #    Uses standard install because these are pure build backends.
+    #    CRITICAL: Comma removed from list below.
+    build_chain = %w[semantic_version typing-extensions setuptools-rust maturin setuptools_scm wheel]
+    build_chain.each do |r_name|
+      venv.pip_install resource(r_name)
     end
 
-    # 6. Install Main Package
-    #    We use system execution here to forcefully inject --no-deps and --no-build-isolation
-    #    which protects against accidental network fetches or isolation rebuilds.
+    # 2. Define Delayed Resources
+    #    These have deep dependency trees (ocrmypdf -> rich -> pygments) 
+    #    and must be installed LAST to find their pre-installed deps.
+    delayed_resources = %w[pyhanko ocrmypdf]
+
+    # 3. Install Standard Runtime Resources
+    #    We use system pip with --no-build-isolation to force usage of the 
+    #    build tools we just bootstrapped in step 1.
+    resources.each do |r|
+      next if build_chain.include?(r.name) || delayed_resources.include?(r.name)
+
+      system libexec/"bin/python", "-m", "pip", "install",
+             "--no-deps",
+             "--no-index",
+             "--no-build-isolation",
+             r.cached_download
+    end
+
+    # 4. Install Delayed Resources (Dependents)
+    delayed_resources.each do |r_name|
+      system libexec/"bin/python", "-m", "pip", "install",
+             "--no-deps",
+             "--no-index",
+             "--no-build-isolation",
+             resource(r_name).cached_download
+    end
+
+    # 5. Install Main Package
     system libexec/"bin/python", "-m", "pip", "install",
            "--no-deps",
+           "--no-index",
            "--no-build-isolation",
            "."
 
-    # 7. Link Executable
     bin.install_symlink libexec/"bin/pdftl"
 
-    # 8. Completions
     if (bash_comp = Utils.safe_popen_read(libexec/"bin/pdftl", "--completion", "bash"))
       (buildpath/"pdftl.bash").write bash_comp
       bash_completion.install "pdftl.bash" => "pdftl"
