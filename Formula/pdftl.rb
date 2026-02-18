@@ -6,7 +6,7 @@ class Pdftl < Formula
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
   sha256 "4df5a715320811c1cb741032bd801515d384a8b66c7bec3408e70f8c56ec16fb"
   license "MPL-2.0"
-  revision 23
+  revision 24
 
   PY_VER = "3.12".freeze
 
@@ -259,6 +259,9 @@ def install
     ENV["PIP_NO_BINARY"] = ":all:"
     ENV["PIP_IGNORE_INSTALLED"] = "1"
     ENV["PYYAML_FORCE_LIBYAML"] = "1"
+    ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
+    ENV["OPENSSL_LIB_DIR"] = Formula["openssl@3"].opt_lib.to_s
+    ENV["OPENSSL_INCLUDE_DIR"] = Formula["openssl@3"].opt_include.to_s
 
     venv = virtualenv_create(libexec, "python#{PY_VER}")
 
