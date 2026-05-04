@@ -8,6 +8,7 @@ class Pdftl < Formula
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
+  ZLIB_FORMULA=OS.linux? ? "zlib-ng-compat" : "zlib"
   depends_on "ccache" => :build
   depends_on "pkg-config" => :build
   depends_on "rust" => :build # for 'cryptography'
@@ -27,7 +28,7 @@ class Pdftl < Formula
   depends_on PY_FORMULA
   depends_on "qpdf"
   depends_on "webp"
-  depends_on "zlib"
+  depends_on ZLIB_FORMULA
 
   # --- Shared & Base Resources ---
   resource "certifi" do
@@ -227,7 +228,8 @@ class Pdftl < Formula
     end
 
     # 2. Native Library Mapping
-    libs = %w[libxml2 libxslt libffi libtiff webp freetype libxcb libyaml zlib].map { |name| Formula[name] }
+    libs = %w[libxml2 libxslt libffi libtiff webp freetype libxcb libyaml].map { |name| Formula[name] }
+    libs << Formula[ZLIB_FORMULA]
     libs.each do |f|
       ENV.append_path "CPATH", f.opt_include
       ENV.append_path "LIBRARY_PATH", f.opt_lib
