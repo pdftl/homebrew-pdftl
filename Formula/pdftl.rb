@@ -6,6 +6,14 @@ class Pdftl < Formula
   license "MPL-2.0"
   revision 2
 
+  bottle do
+    root_url "https://github.com/pdftl/homebrew-pdftl/releases/download/v0.11.1-rev34"
+    rebuild 1
+    sha256 cellar: :any, arm64_tahoe:  "3efc81f9a5e8ffd54592b6c02b83d23f69decb4ff4451c7b4a29781f09dc5676"
+    sha256 cellar: :any, sequoia:      "52873af9a76c1b80b01cd35b9b9bdd5db84608c7332ce14f1da1ef18e8d74b8e"
+    sha256               x86_64_linux: "e1cff5bebc27ef2b688b720532124119fc6a0cafe7833a3efd5f2932c22c9935"
+  end
+
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
   ZLIB_FORMULA=OS.linux? ? "zlib-ng-compat" : "zlib"
