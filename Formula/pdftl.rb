@@ -17,8 +17,10 @@ class Pdftl < Formula
   depends_on "libheif"
   depends_on "libpng"
   depends_on "libtiff"
+  depends_on "libxcb"
   depends_on "libxml2"
   depends_on "libxslt"
+  depends_on "libyaml"
   depends_on "little-cms2"
   depends_on "openjpeg"
   depends_on "openssl@3"
@@ -225,7 +227,7 @@ class Pdftl < Formula
     end
 
     # 2. Native Library Mapping
-    libs = %w[libxml2 libxslt libffi libtiff webp freetype].map { |name| Formula[name] }
+    libs = %w[libxml2 libxslt libffi libtiff webp freetype libxcb libyaml].map { |name| Formula[name] }
     libs.each do |f|
       ENV.append_path "CPATH", f.opt_include
       ENV.append_path "LIBRARY_PATH", f.opt_lib
