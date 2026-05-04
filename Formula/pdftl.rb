@@ -1,5 +1,4 @@
 class Pdftl < Formula
-  include Language::Python::Virtualenv
 
   desc "Modern pdftk-compatible PDF CLI tool"
   homepage "https://github.com/pdftl/pdftl"
