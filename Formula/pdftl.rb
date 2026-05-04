@@ -21,6 +21,7 @@ class Pdftl < Formula
   depends_on "libxslt"
   depends_on "little-cms2"
   depends_on "openjpeg"
+  depends_on "openssl@3"
   depends_on PY_FORMULA
   depends_on "qpdf"
   depends_on "webp"
