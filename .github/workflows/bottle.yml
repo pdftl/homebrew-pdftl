@@ -33,7 +33,11 @@ jobs:
         run: brew tap pdftl/pdftl
 
       - name: Overwrite Python Links
-        run: brew link --overwrite python@3.12
+        run: |
+          # 1. Install the dependency first (this will build/download but fail to link)
+          brew install python@3.12 || true
+          # 2. Force the link now that the "keg" exists in the Cellar
+          brew link --overwrite python@3.12
 
       - name: Diagnostic Check
         run: |
