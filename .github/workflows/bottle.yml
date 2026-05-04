@@ -32,6 +32,9 @@ jobs:
       - name: Tap repository
         run: brew tap pdftl/pdftl
 
+      - name: Overwrite Python Links
+        run: brew link --overwrite python@3.12
+
       - name: Diagnostic Check
         run: |
           echo "--- Homebrew Config ---"
