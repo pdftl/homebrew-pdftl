@@ -227,7 +227,7 @@ class Pdftl < Formula
     end
 
     # 2. Native Library Mapping
-    libs = %w[libxml2 libxslt libffi libtiff webp freetype libxcb libyaml].map { |name| Formula[name] }
+    libs = %w[libxml2 libxslt libffi libtiff webp freetype libxcb libyaml zlib].map { |name| Formula[name] }
     libs.each do |f|
       ENV.append_path "CPATH", f.opt_include
       ENV.append_path "LIBRARY_PATH", f.opt_lib
