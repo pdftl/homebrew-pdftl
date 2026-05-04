@@ -1,5 +1,4 @@
 class Pdftl < Formula
-
   desc "Modern pdftk-compatible PDF CLI tool"
   homepage "https://github.com/pdftl/pdftl"
   url "https://files.pythonhosted.org/packages/50/87/8f3366be9017319ed097f48c2843b9be2fd43099abcd5ad9ebe0ea7f53a9/pdftl-0.11.1.tar.gz"
@@ -217,11 +216,6 @@ class Pdftl < Formula
   end
 
   def install
-    if OS.mac? && !Formula[PY_FORMULA].linked_keg.exist?
-      ohai "Fixing Python linkage for macOS runner..."
-      system "brew", "link", "--overwrite", PY_FORMULA
-    end
-
     # 1. Environment Cleanup & Compiler Setup
     ENV.delete("PYTHONPATH")
     if which("ccache")
