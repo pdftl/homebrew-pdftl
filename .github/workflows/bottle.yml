@@ -111,4 +111,4 @@ jobs:
           git config user.email "actions@github.com"
           git add Formula/pdftl.rb
           git commit -m "pdftl: update bottle block for ${GITHUB_REF_NAME}" || echo "No changes"
-          git push
+          git push origin main
