@@ -58,6 +58,13 @@ jobs:
             --root-url="https://github.com/pdftl/homebrew-pdftl/releases/download/${GITHUB_REF_NAME}" \
             pdftl
 
+      - name: Format Bottle Names for Release
+        run: |
+          # Translate Homebrew's local double-dash format to the single-dash URL format
+          for file in *.bottle.*; do
+            mv "$file" "${file/--/-}"
+          done
+
       - name: Upload Homebrew Logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
