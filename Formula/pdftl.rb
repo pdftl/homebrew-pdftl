@@ -7,11 +7,11 @@ class Pdftl < Formula
   revision 2
 
   bottle do
-    root_url "https://github.com/pdftl/homebrew-pdftl/releases/download/v0.11.1-rev35"
-    rebuild 2
-    sha256 cellar: :any, arm64_tahoe:  "9f7a76dea45e152a7184a750f546b9c7a92cc63ba72a46d14f8726080a9de4cb"
-    sha256 cellar: :any, sequoia:      "83aee82e14ebf0c8577a5a9aa071182c3405c5c4df14543d073f4e5827846020"
-    sha256               x86_64_linux: "cdc2254792a25dcea2ec459658259c521a237994d8e2baea45b8931feb4b0a1f"
+    root_url "https://github.com/pdftl/homebrew-pdftl/releases/download/v0.11.1-rev36"
+    rebuild 3
+    sha256 cellar: :any, arm64_tahoe:  "7a071992e8e44f7be19ff373e0f99f5f27391140623209cf32bc3c451f100c4f"
+    sha256 cellar: :any, sequoia:      "23a3ce0ad7e3559497b2e0b43c795d35b450eb5ec7ba25ca1761932d6a6ea52e"
+    sha256               x86_64_linux: "fbe6be260cc5f1120255cfce40c91195d58244a4dca23c8add2b0c7122db967c"
   end
 
   PY_VER="3.12".freeze
