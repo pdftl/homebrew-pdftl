@@ -16,7 +16,7 @@ class Pdftl < Formula
 
   PY_VER="3.12".freeze
   PY_FORMULA="python@#{PY_VER}".freeze
-  ZLIB_FORMULA=OS.linux? ? "zlib-ng-compat" : "zlib"
+  ZLIB_FORMULA=(OS.linux? ? "zlib-ng-compat" : "zlib").freeze
   depends_on "ccache" => :build
   depends_on "pkg-config" => :build
   depends_on "rust" => :build # for 'cryptography'
